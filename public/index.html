@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cabaña Risaralda — Reservas</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header class="site-header">
+  <h1>🏡 Cabaña Risaralda</h1>
+  <p>Risaralda, Caldas &middot; Eje cafetero &middot; Hasta 4 personas &middot; Ideal para parejas</p>
+</header>
+
+<!-- ── Contenido principal ──────────────────────────────────────────────────── -->
+<main class="site-main">
+
+  <!-- Mensaje selección -->
+  <div id="msg-seleccion" class="text-suave mb-16" style="min-height:22px;"></div>
+
+  <!-- Calendario + panel cotización -->
+  <div class="layout-dos-col">
+    <!-- Calendario -->
+    <div>
+      <div id="calendario-cliente"></div>
+    </div>
+
+    <!-- Panel derecho -->
+    <div>
+      <!-- Selector de personas (aparece al elegir fecha inicio) -->
+      <div id="panel-personas" class="card hidden mb-16">
+        <div class="section-title">¿Cuántas personas?</div>
+        <div class="personas-selector">
+          <button onclick="cambiarPersonas(-1)">&#8722;</button>
+          <span id="num-personas">2</span>
+          <button onclick="cambiarPersonas(1)">&#43;</button>
+        </div>
+        <p id="nota-sofa" class="nota-sofa hidden">🛋️ Personas 3 y 4 se acomodan en el sofá cama</p>
+      </div>
+
+      <!-- Panel cotización (aparece al elegir rango completo) -->
+      <div id="panel-cotizacion" class="panel-cotizacion hidden">
+        <h3>Tu cotización</h3>
+
+        <div class="cot-row">
+          <span class="cot-label">Llegada</span>
+          <span id="cot-llegada">—</span>
+        </div>
+        <div class="cot-row">
+          <span class="cot-label">Salida</span>
+          <span id="cot-salida">—</span>
+        </div>
+        <div class="cot-row">
+          <span class="cot-label">Noches</span>
+          <span id="cot-noches">—</span>
+        </div>
+        <div class="cot-row">
+          <span class="cot-label">Tarifa / noche</span>
+          <span id="cot-tarifa">—</span>
+        </div>
+        <div class="divider"></div>
+        <div class="cot-row total">
+          <span>Total</span>
+          <span id="cot-total">—</span>
+        </div>
+        <div class="cot-row anticipo">
+          <span>Anticipo (50%)</span>
+          <span id="cot-anticipo">—</span>
+        </div>
+        <div class="cot-row text-suave" style="font-size:.78rem;">
+          <span>Saldo al llegar</span>
+          <span id="cot-saldo">—</span>
+        </div>
+
+        <ul class="incluidos mt-8">
+          <li>Botella de vino incluida</li>
+          <li>Cama doble + sofá cama</li>
+          <li>WiFi, BBQ, cocina equipada</li>
+          <li class="no">No incluye comidas</li>
+        </ul>
+
+        <button id="btn-wa" class="btn btn--wa btn--full mt-8" onclick="reservarWhatsApp()">
+          📱 Reservar por WhatsApp
+        </button>
+
+        <p class="text-suave mt-8 text-center" style="font-size:.78rem;">
+          Check-in 3:00 PM &nbsp;·&nbsp; Check-out 1:00 PM
+        </p>
+      </div>
+
+      <!-- Aviso error rango -->
+      <div id="panel-error" class="hidden" style="background:#fff3f3;border:1.5px solid #ef5350;border-radius:8px;padding:12px;color:#c62828;font-size:.88rem;"></div>
+    </div>
+  </div>
+
+  <!-- ── Info de la cabaña ──────────────────────────────────────────────────── -->
+  <div class="divider" style="margin: 32px 0;"></div>
+
+  <div class="section-title">La cabaña</div>
+  <div class="servicios-grid">
+    <div class="servicio-item"><span class="servicio-icono">📶</span>WiFi</div>
+    <div class="servicio-item"><span class="servicio-icono">🍳</span>Cocina equipada</div>
+    <div class="servicio-item"><span class="servicio-icono">🔥</span>Zona BBQ & fogón</div>
+    <div class="servicio-item"><span class="servicio-icono">🚗</span>Parqueadero</div>
+    <div class="servicio-item"><span class="servicio-icono">🐾</span>Mascotas bienvenidas</div>
+    <div class="servicio-item"><span class="servicio-icono">☕</span>Vista al cafetal</div>
+  </div>
+
+  <div class="card mt-16" style="max-width:520px;">
+    <div class="section-title">Acomodación & precios</div>
+    <p class="text-suave">🛏️ Cama doble + sofá cama &nbsp;·&nbsp; Ideal para parejas &nbsp;·&nbsp; Máx. 4 personas</p>
+    <div class="divider"></div>
+    <table style="width:100%;font-size:.88rem;border-collapse:collapse;">
+      <tr><td style="padding:5px 0;">1–2 personas</td><td style="text-align:right;font-weight:600;">$350.000/noche</td></tr>
+      <tr><td style="padding:5px 0;color:var(--texto-suave);">+ 3ª persona</td><td style="text-align:right;color:var(--texto-suave);">+$70.000/noche</td></tr>
+      <tr><td style="padding:5px 0;color:var(--texto-suave);">+ 4ª persona</td><td style="text-align:right;color:var(--texto-suave);">+$70.000/noche</td></tr>
+    </table>
+    <div class="divider"></div>
+    <p class="text-suave">🍷 Botella de vino incluida &nbsp;·&nbsp; Check-in 3pm &nbsp;·&nbsp; Checkout 1pm</p>
+    <p class="text-suave mt-8">💳 Anticipo 50% (Nequi/Bancolombia) &nbsp;·&nbsp; Saldo 50% al llegar</p>
+  </div>
+
+</main>
+
+<script src="/js/calendario.js"></script>
+<script src="/js/cliente.js"></script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Cabaña Risaralda</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ── Modal de Login ─────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-login">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-header"><h2>🔐 Panel Admin</h2></div>
+    <div id="login-error" class="hidden" style="color:#c62828;font-size:.85rem;margin-bottom:10px;"></div>
+    <div class="form-group">
+      <label>Usuario</label>
+      <input type="text" id="login-user" placeholder="admin" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn--cafe btn--full" onclick="doLogin()">Ingresar</button>
+  </div>
+</div>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────────── -->
+<header class="admin-header">
+  <h1>🏡 Cabaña Risaralda — Panel Admin</h1>
+  <button class="btn btn--ghost btn--sm" style="color:#fff;border-color:#fff;" onclick="cerrarSesion()">Salir</button>
+</header>
+
+<!-- ── Contenido principal ────────────────────────────────────────────────────── -->
+<div class="admin-layout">
+
+  <!-- Columna izquierda: métricas + calendario -->
+  <div>
+    <!-- Métricas -->
+    <div class="metricas-row mb-16">
+      <div class="card card--metrica">
+        <div class="metrica-valor" id="met-noches">—</div>
+        <div class="metrica-label">Noches ocupadas</div>
+      </div>
+      <div class="card card--metrica">
+        <div class="metrica-valor" id="met-ingresos">—</div>
+        <div class="metrica-label">Ingresos confirmados</div>
+      </div>
+      <div class="card card--metrica">
+        <div class="metrica-valor" id="met-pendientes">—</div>
+        <div class="metrica-label">Pendientes de pago</div>
+      </div>
+    </div>
+
+    <!-- Calendario admin -->
+    <div id="calendario-admin"></div>
+
+    <!-- Panel de bloqueo (aparece al seleccionar rango libre) -->
+    <div id="panel-bloqueo" class="bloqueo-panel hidden mt-16">
+      <h4>🔒 Bloquear rango seleccionado</h4>
+      <div id="bloqueo-fechas" class="text-suave mb-16" style="font-size:.85rem;"></div>
+      <div class="form-group">
+        <label>Motivo</label>
+        <select id="bloqueo-motivo">
+          <option value="personal">Uso personal</option>
+          <option value="mantenimiento">Mantenimiento</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Descripción (opcional)</label>
+        <input type="text" id="bloqueo-descripcion" placeholder="ej. Familia llegando ese fin de semana">
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn--warning btn--sm" onclick="bloquearRango()">Bloquear</button>
+        <button class="btn btn--ghost btn--sm" style="color:#666;" onclick="cancelarBloqueo()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Columna derecha: gestión de reservas -->
+  <div>
+    <div class="card">
+      <div class="section-title">Reservas del mes</div>
+      <button class="btn btn--success btn--sm btn--full mb-16" onclick="abrirModalNuevaReserva()">
+        + Nueva reserva
+      </button>
+      <div id="lista-reservas">
+        <p class="text-suave">Cargando...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Detalle / acciones reserva ───────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="modal-reserva">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Detalle de reserva</h2>
+      <button class="btn-close" onclick="cerrarModal('modal-reserva')">&times;</button>
+    </div>
+    <div id="detalle-reserva"></div>
+    <div class="flex gap-8 mt-16" id="acciones-reserva"></div>
+  </div>
+</div>
+
+<!-- ── Modal: Nueva reserva ─────────────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="modal-nueva-reserva">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Nueva reserva</h2>
+      <button class="btn-close" onclick="cerrarModal('modal-nueva-reserva')">&times;</button>
+    </div>
+    <div id="nueva-reserva-error" class="hidden" style="color:#c62828;font-size:.85rem;margin-bottom:10px;padding:8px;background:#fff3f3;border-radius:6px;"></div>
+    <div class="form-group">
+      <label>Nombre completo *</label>
+      <input type="text" id="nr-nombre" placeholder="María García">
+    </div>
+    <div class="form-group">
+      <label>Cédula</label>
+      <input type="text" id="nr-cedula" placeholder="1234567890">
+    </div>
+    <div class="form-group">
+      <label>Celular *</label>
+      <input type="tel" id="nr-celular" placeholder="3001234567">
+    </div>
+    <div class="form-group">
+      <label>Fecha de entrada (check-in 3pm) *</label>
+      <input type="date" id="nr-entrada">
+    </div>
+    <div class="form-group">
+      <label>Fecha de salida (checkout 1pm) *</label>
+      <input type="date" id="nr-salida">
+    </div>
+    <div class="form-group">
+      <label>Número de personas</label>
+      <select id="nr-personas">
+        <option value="1">1 persona</option>
+        <option value="2" selected>2 personas</option>
+        <option value="3">3 personas</option>
+        <option value="4">4 personas</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>WhatsApp (sin +, con código país)</label>
+      <input type="text" id="nr-wa" placeholder="573001234567">
+    </div>
+    <div class="form-group">
+      <label>Notas</label>
+      <textarea id="nr-notas" rows="2" placeholder="Notas adicionales..."></textarea>
+    </div>
+    <div id="nr-precio-preview" class="hidden" style="background:var(--cafe-claro);padding:10px;border-radius:7px;font-size:.85rem;margin-bottom:14px;"></div>
+    <button class="btn btn--cafe btn--full" onclick="crearReserva()">Crear reserva</button>
+  </div>
+</div>
+
+<script src="/js/calendario.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>
