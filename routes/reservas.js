@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../src/database');
 const { isValidDate } = require('../src/utils');
+const { requireAuth } = require('./admin');
 
 // GET /api/reservas?estado=confirmada&mes=2024-11
 router.get('/', (req, res) => {
@@ -16,8 +17,8 @@ router.get('/:id', (req, res) => {
   res.json(reserva);
 });
 
-// POST /api/reservas — crear reserva (desde admin o desde agente)
-router.post('/', (req, res) => {
+// POST /api/reservas — crear reserva (desde admin)
+router.post('/', requireAuth, (req, res) => {
   const { nombre, cedula, celular, fecha_entrada, fecha_salida, num_personas, notas, wa_number } = req.body;
 
   if (!nombre || !celular || !fecha_entrada || !fecha_salida) {
@@ -41,9 +42,13 @@ router.post('/', (req, res) => {
 });
 
 // PATCH /api/reservas/:id/confirmar
-router.patch('/:id/confirmar', (req, res) => {
+router.patch('/:id/confirmar', requireAuth, (req, res) => {
   const reserva = db.getReserva(parseInt(req.params.id));
   if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada' });
+
+  if (!['prereserva', 'pendiente'].includes(reserva.estado)) {
+    return res.status(400).json({ error: `No se puede confirmar una reserva en estado "${reserva.estado}"` });
+  }
 
   const actualizada = db.actualizarReserva(reserva.id, {
     anticipo_pagado: 1,
@@ -53,7 +58,7 @@ router.patch('/:id/confirmar', (req, res) => {
 });
 
 // PATCH /api/reservas/:id/cancelar
-router.patch('/:id/cancelar', (req, res) => {
+router.patch('/:id/cancelar', requireAuth, (req, res) => {
   const reserva = db.getReserva(parseInt(req.params.id));
   if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada' });
 
@@ -62,7 +67,7 @@ router.patch('/:id/cancelar', (req, res) => {
 });
 
 // PATCH /api/reservas/:id/completar
-router.patch('/:id/completar', (req, res) => {
+router.patch('/:id/completar', requireAuth, (req, res) => {
   const reserva = db.getReserva(parseInt(req.params.id));
   if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada' });
 

@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const { calcularNoches, ajustarAnioReserva } = require('./utils');
 
 const DB_PATH = path.join(__dirname, '..', 'data', 'reservas.db');
 let db;
@@ -54,7 +55,28 @@ function init() {
       contenido TEXT NOT NULL,
       timestamp TEXT DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE INDEX IF NOT EXISTS idx_reservas_fechas ON reservas(fecha_entrada, fecha_salida);
+    CREATE INDEX IF NOT EXISTS idx_reservas_estado ON reservas(estado);
+    CREATE INDEX IF NOT EXISTS idx_mensajes_wa ON mensajes(wa_number);
+    CREATE INDEX IF NOT EXISTS idx_conversaciones_wa ON conversaciones(wa_number);
   `);
+
+  // Migración: pendiente sin pago → prereserva
+  db.prepare(`
+    UPDATE reservas SET estado = 'prereserva'
+    WHERE estado = 'pendiente' AND (anticipo_pagado IS NULL OR anticipo_pagado = 0)
+  `).run();
+
+  // Corregir años antiguos mal interpretados por la IA (2023/2024 → 2026)
+  const anioActual = new Date().getFullYear();
+  db.prepare(`
+    UPDATE reservas
+    SET fecha_entrada = printf('%d-%s', ?, substr(fecha_entrada, 6)),
+        fecha_salida = printf('%d-%s', ?, substr(fecha_salida, 6))
+    WHERE CAST(substr(fecha_entrada, 1, 4) AS INTEGER) < ?
+      AND estado NOT IN ('cancelada', 'completada')
+  `).run(anioActual, anioActual, anioActual);
 
   return db;
 }
@@ -106,9 +128,10 @@ function verificarDisponibilidad(fechaEntrada, fechaSalida) {
 }
 
 function calcularPrecio(fechaEntrada, fechaSalida, numPersonas = 2) {
-  const entrada = new Date(fechaEntrada + 'T12:00:00');
-  const salida = new Date(fechaSalida + 'T12:00:00');
-  const noches = Math.round((salida - entrada) / (1000 * 60 * 60 * 24));
+  const noches = calcularNoches(fechaEntrada, fechaSalida);
+  if (noches < 1) {
+    throw new Error('fecha_salida debe ser al menos el día después del check-in');
+  }
   const personas = Math.min(Math.max(parseInt(numPersonas) || 2, 1), 4);
   const tarifaBase = 350000;
   const adicionales = Math.max(0, personas - 2) * 70000;
@@ -120,18 +143,24 @@ function calcularPrecio(fechaEntrada, fechaSalida, numPersonas = 2) {
 
 // ── Reservas CRUD ─────────────────────────────────────────────────────────────
 
-function crearReserva({ nombre, cedula, celular, fecha_entrada, fecha_salida, num_personas, notas, wa_number }) {
+function crearReserva({
+  nombre, cedula, celular, fecha_entrada, fecha_salida, num_personas, notas, wa_number,
+  estado = 'prereserva',
+}) {
   const database = getDb();
+  fecha_entrada = ajustarAnioReserva(fecha_entrada);
+  fecha_salida = ajustarAnioReserva(fecha_salida);
   const precio = calcularPrecio(fecha_entrada, fecha_salida, num_personas || 2);
+  const estadoFinal = estado || 'prereserva';
 
   const result = database.prepare(`
     INSERT INTO reservas
-      (nombre, cedula, celular, fecha_entrada, fecha_salida, num_personas, num_noches, total_cop, anticipo_cop, notas, wa_number)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (nombre, cedula, celular, fecha_entrada, fecha_salida, num_personas, num_noches, total_cop, anticipo_cop, notas, wa_number, estado)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     nombre, cedula || null, celular, fecha_entrada, fecha_salida,
     precio.personas, precio.noches, precio.total, precio.anticipo,
-    notas || null, wa_number || null
+    notas || null, wa_number || null, estadoFinal
   );
 
   return { id: result.lastInsertRowid, ...precio };
@@ -196,17 +225,26 @@ function getBloqueosPorMes(year, month) {
 
 // ── Estado día (para el calendario) ──────────────────────────────────────────
 
+function getReservasEnDia(fecha) {
+  return getDb().prepare(`
+    SELECT * FROM reservas
+    WHERE fecha_entrada <= ? AND fecha_salida > ?
+      AND estado NOT IN ('cancelada')
+    ORDER BY id ASC
+  `).all(fecha, fecha);
+}
+
 function getEstadoDia(fecha) {
   const database = getDb();
   const bloqueo = database.prepare('SELECT motivo FROM bloqueos WHERE fecha = ?').get(fecha);
   if (bloqueo) return bloqueo.motivo === 'mantenimiento' ? 'mantenimiento' : 'bloqueado';
 
-  const reserva = database.prepare(`
-    SELECT id FROM reservas
-    WHERE fecha_entrada <= ? AND fecha_salida > ?
-      AND estado NOT IN ('cancelada')
-  `).get(fecha, fecha);
-  if (reserva) return 'reservada';
+  const reservas = getReservasEnDia(fecha);
+  if (reservas.length > 1) return 'conflicto';
+  if (reservas.length === 1) {
+    if (reservas[0].estado === 'prereserva' || reservas[0].estado === 'pendiente') return 'prereserva';
+    return 'reservada';
+  }
 
   return 'disponible';
 }
@@ -269,7 +307,9 @@ function getMetricasMes(year, month) {
   const ingresosConfirmados = reservasMes
     .filter(r => r.estado === 'confirmada' || r.estado === 'completada')
     .reduce((sum, r) => sum + r.total_cop, 0);
-  const pendientesPago = reservasMes.filter(r => r.estado === 'pendiente').length;
+  const pendientesPago = reservasMes.filter(r =>
+    r.estado === 'prereserva' || r.estado === 'pendiente'
+  ).length;
 
   return { nochesOcupadas, ingresosConfirmados, pendientesPago };
 }
@@ -303,6 +343,7 @@ module.exports = {
   eliminarBloqueo,
   getBloqueos,
   getBloqueosPorMes,
+  getReservasEnDia,
   getEstadoDia,
   getConversacion,
   upsertConversacion,

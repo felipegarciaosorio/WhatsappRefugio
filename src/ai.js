@@ -56,7 +56,10 @@ async function chatGemini({ systemPrompt, messages, tools }) {
     'gemini-2.0-flash-lite',
   ].filter(Boolean);
 
-  const history = toGeminiHistory(messages.slice(0, -1));
+  // Gemini exige que el historial empiece con rol 'user' — descartar mensajes de model al inicio
+  const rawHistory = toGeminiHistory(messages.slice(0, -1));
+  const firstUserIdx = rawHistory.findIndex(m => m.role === 'user');
+  const history = firstUserIdx > 0 ? rawHistory.slice(firstUserIdx) : rawHistory;
   const lastMessage = messages[messages.length - 1].content;
 
   let lastErr = null;
@@ -80,6 +83,10 @@ async function chatGemini({ systemPrompt, messages, tools }) {
       }
       return { type: 'text', content: response.text() };
     } catch (e) {
+      const isQuota = e.message?.includes('429') || e.message?.includes('quota') || e.message?.includes('Too Many Requests');
+      if (isQuota) {
+        throw e; // No tiene sentido probar otros modelos del mismo tier
+      }
       console.warn(`Gemini modelo ${modelName} falló:`, e.message);
       lastErr = e;
     }
@@ -94,12 +101,32 @@ async function chatGroq({ systemPrompt, messages, tools = null, _allMessages = n
   const groqTools = toGroqTools(tools);
   const allMessages = _allMessages || [{ role: 'system', content: systemPrompt }, ...messages];
 
-  const completion = await groq.chat.completions.create({
-    model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
-    messages: allMessages,
-    max_tokens: 600,
-    ...(groqTools ? { tools: groqTools, tool_choice: 'auto' } : {}),
-  });
+  const candidateModels = [
+    process.env.GROQ_MODEL,
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'gemma2-9b-it',
+  ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i); // únicos
+
+  let completion;
+  let lastErr;
+  for (const model of candidateModels) {
+    try {
+      completion = await groq.chat.completions.create({
+        model,
+        messages: allMessages,
+        max_tokens: 600,
+        ...(groqTools ? { tools: groqTools, tool_choice: 'auto' } : {}),
+      });
+      break;
+    } catch (e) {
+      const isLimit = e.message?.includes('rate_limit') || e.message?.includes('Rate limit') || e.status === 429;
+      console.warn(`Groq modelo ${model} falló:`, e.message?.slice(0, 80));
+      lastErr = e;
+      if (!isLimit) throw e; // error no relacionado con límite → no reintentar
+    }
+  }
+  if (!completion) throw lastErr || new Error('Todos los modelos de Groq fallaron');
 
   const msg = completion.choices[0]?.message;
   if (msg?.tool_calls?.length > 0) {
@@ -108,7 +135,6 @@ async function chatGroq({ systemPrompt, messages, tools = null, _allMessages = n
       type: 'function_call',
       name: toolCall.function.name,
       args: JSON.parse(toolCall.function.arguments),
-      // _session sirve como token de continuación (compatible con sendFunctionResult)
       _session: {
         _provider: 'groq',
         _messages: [...allMessages, msg],
@@ -119,7 +145,33 @@ async function chatGroq({ systemPrompt, messages, tools = null, _allMessages = n
     };
   }
 
-  return { type: 'text', content: msg?.content || '' };
+  // Groq/Llama a veces devuelve la function call como texto plano en vez de tool_calls
+  const content = msg?.content || '';
+  const fnMatch = content.match(/<function=(\w+)>([\s\S]*?)<\/function>/);
+  if (fnMatch) {
+    try {
+      const name = fnMatch[1];
+      const args = JSON.parse(fnMatch[2]);
+      const fakeId = `text_fn_${Date.now()}`;
+      console.warn(`Groq devolvió function call como texto, parseando: ${name}`);
+      return {
+        type: 'function_call',
+        name,
+        args,
+        _session: {
+          _provider: 'groq',
+          _messages: [...allMessages, msg],
+          _toolCallId: fakeId,
+          _systemPrompt: systemPrompt,
+          _tools: tools,
+        },
+      };
+    } catch (e) {
+      console.warn('No se pudo parsear function call embebida en texto:', e.message);
+    }
+  }
+
+  return { type: 'text', content };
 }
 
 async function sendFunctionResult({ session, functionName, result }) {
@@ -152,22 +204,27 @@ async function sendFunctionResult({ session, functionName, result }) {
   }
 
   // Gemini path
-  const response = await session.sendMessage([{
-    functionResponse: { name: functionName, response: result },
-  }]);
+  try {
+    const response = await session.sendMessage([{
+      functionResponse: { name: functionName, response: result },
+    }]);
 
-  const parts = response.response.candidates?.[0]?.content?.parts || [];
-  for (const part of parts) {
-    if (part.functionCall) {
-      return {
-        type: 'function_call',
-        name: part.functionCall.name,
-        args: part.functionCall.args,
-        _session: session,
-      };
+    const parts = response.response.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part.functionCall) {
+        return {
+          type: 'function_call',
+          name: part.functionCall.name,
+          args: part.functionCall.args,
+          _session: session,
+        };
+      }
     }
+    return { type: 'text', content: response.response.text() };
+  } catch (err) {
+    console.warn('Gemini sendFunctionResult falló:', err.message);
+    throw err;
   }
-  return { type: 'text', content: response.response.text() };
 }
 
 module.exports = { chat, sendFunctionResult };

@@ -6,8 +6,8 @@ const wa = require('./whatsapp');
 const TZ = 'America/Bogota';
 
 function init() {
-  // Corre cada hora
-  cron.schedule('0 * * * *', async () => {
+  // Corre a las 9 AM hora Bogotá, una vez al día
+  cron.schedule('0 9 * * *', async () => {
     const ahora = moment().tz(TZ);
     const manana = ahora.clone().add(1, 'day').format('YYYY-MM-DD');
     const ayer = ahora.clone().subtract(1, 'day').format('YYYY-MM-DD');
@@ -16,7 +16,7 @@ function init() {
       // 1. Recordatorio check-in (24h antes)
       const checkins = db.getReservasParaRecordatorioCheckin(manana);
       for (const r of checkins) {
-        const msg = `¡Hola ${r.nombre}! 🏡 Te esperamos mañana en Cabaña Risaralda.\nCheck-in: 3:00 PM\n📍 Risaralda, Caldas — te compartimos el acceso exacto al confirmar tu llegada.\n¿Alguna duda antes de venir? ☕`;
+        const msg = `¡Hola ${r.nombre}! 🏡 Te esperamos mañana en Refugio del Viento.\nCheck-in: 3:00 PM\n📍 Risaralda, Caldas — te compartimos el acceso exacto al confirmar tu llegada.\n¿Alguna duda antes de venir? ☕`;
         if (r.wa_number) {
           await wa.sendMessage(r.wa_number, msg);
         }
@@ -27,7 +27,7 @@ function init() {
       // 2. Recordatorio reseña (24h después del checkout)
       const resenas = db.getReservasParaRecordatorioResena(ayer);
       for (const r of resenas) {
-        const msg = `¡Hola ${r.nombre}! Esperamos que hayas disfrutado tu estadía en Cabaña Risaralda 🌿\nNos encantaría que nos dejaras una reseña en Google Maps, ¡nos ayuda mucho!\n👉 https://g.page/r/cabana-risaralda/review\n¡Hasta pronto! ☕🏡`;
+        const msg = `¡Hola ${r.nombre}! Esperamos que hayas disfrutado tu estadía en Refugio del Viento 🌿\nNos encantaría que nos dejaras una reseña en Google Maps, ¡nos ayuda mucho!\n👉 https://g.page/r/cabana-risaralda/review\n¡Hasta pronto! ☕🏡`;
         if (r.wa_number) {
           await wa.sendMessage(r.wa_number, msg);
         }
@@ -51,7 +51,7 @@ function init() {
     }
   });
 
-  console.log('Scheduler de recordatorios iniciado (corre cada hora)');
+  console.log('Scheduler de recordatorios iniciado (corre a las 9 AM Bogotá)');
 }
 
 module.exports = { init };

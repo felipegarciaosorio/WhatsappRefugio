@@ -47,8 +47,9 @@ async function iniciarAdmin() {
     onDayClick: handleDiaClickAdmin,
   });
 
-  await cargarMetricas();
-  await cargarReservasMes();
+  await refrescar();
+  // Actualizar calendario cada 45s por si entra una prereserva por WhatsApp
+  setInterval(() => refrescar(), 45000);
 }
 
 // ── Calendario ────────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ function handleSeleccionAdmin(event) {
 }
 
 function handleDiaClickAdmin(dateStr, estado) {
-  if (estado === 'reservada') {
+  if (estado === 'reservada' || estado === 'prereserva' || estado === 'conflicto') {
     abrirDetalleReservaPorFecha(dateStr);
   }
 }
@@ -122,7 +123,7 @@ function renderListaReservas(reservas) {
       <div class="reserva-item-fechas">${formatCOP(r.total_cop)} · Anticipo: ${r.anticipo_pagado ? '✅ Pagado' : '⏳ Pendiente'}</div>
       <div class="reserva-item-acciones">
         <button class="btn btn--primary btn--sm" onclick="abrirDetalleReserva(${r.id})">Ver</button>
-        ${r.estado === 'pendiente' ? `<button class="btn btn--success btn--sm" onclick="confirmarReserva(${r.id})">Confirmar pago</button>` : ''}
+        ${(r.estado === 'prereserva' || r.estado === 'pendiente') ? `<button class="btn btn--success btn--sm" onclick="confirmarReserva(${r.id})">Confirmar pago</button>` : ''}
         ${r.estado !== 'cancelada' && r.estado !== 'completada' ? `<button class="btn btn--danger btn--sm" onclick="cancelarReserva(${r.id})">Cancelar</button>` : ''}
       </div>
     </div>
@@ -144,12 +145,41 @@ async function abrirDetalleReservaPorFecha(fecha) {
     const mes = fecha.slice(0, 7);
     const res = await fetch(`/api/reservas?mes=${mes}`, { headers: authHeaders() });
     const reservas = await res.json();
-    const r = reservas.find(rv =>
+    const delDia = reservas.filter(rv =>
       rv.fecha_entrada <= fecha && rv.fecha_salida > fecha &&
       rv.estado !== 'cancelada'
     );
-    if (r) mostrarModalReserva(r);
+    if (!delDia.length) return;
+    if (delDia.length === 1) {
+      mostrarModalReserva(delDia[0]);
+      return;
+    }
+    mostrarModalConflictoDia(fecha, delDia);
   } catch (e) {}
+}
+
+function mostrarModalConflictoDia(fecha, reservas) {
+  const el = document.getElementById('detalle-reserva');
+  el.innerHTML = `
+    <p style="color:#c62828;font-weight:600;margin-bottom:12px;">
+      ⚠️ Hay ${reservas.length} reservas activas el ${formatFechaDisplay(fecha)}. Solo debe quedar una.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${reservas.map(r => `
+        <div style="border:1px solid #ddd;border-radius:8px;padding:10px;">
+          <strong>${r.nombre || 'Sin nombre'}</strong>
+          <span class="badge badge--${r.estado}">${r.estado}</span><br>
+          <span style="font-size:.85rem;color:var(--texto-suave);">
+            ${formatFechaDisplay(r.fecha_entrada)} → ${formatFechaDisplay(r.fecha_salida)}
+            · ${formatCOP(r.total_cop)}
+          </span><br>
+          <button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="abrirDetalleReserva(${r.id})">Ver / gestionar</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  document.getElementById('acciones-reserva').innerHTML = '';
+  document.getElementById('modal-reserva').classList.remove('hidden');
 }
 
 function mostrarModalReserva(r) {
@@ -173,7 +203,7 @@ function mostrarModalReserva(r) {
   const acciones = document.getElementById('acciones-reserva');
   acciones.innerHTML = '';
 
-  if (r.estado === 'pendiente') {
+  if (r.estado === 'prereserva' || r.estado === 'pendiente') {
     const btnConf = document.createElement('button');
     btnConf.className = 'btn btn--success btn--sm';
     btnConf.textContent = 'Confirmar anticipo pagado';
@@ -254,11 +284,6 @@ function abrirModalNuevaReserva() {
   document.getElementById('nueva-reserva-error').classList.add('hidden');
   document.getElementById('nr-precio-preview').classList.add('hidden');
   document.getElementById('modal-nueva-reserva').classList.remove('hidden');
-
-  // Al cambiar fechas, mostrar preview de precio
-  ['nr-entrada', 'nr-salida', 'nr-personas'].forEach(id => {
-    document.getElementById(id).addEventListener('change', actualizarPreviewPrecio);
-  });
 }
 
 function actualizarPreviewPrecio() {
@@ -345,6 +370,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Permitir login con Enter
   document.getElementById('login-pass').addEventListener('keydown', e => {
     if (e.key === 'Enter') doLogin();
+  });
+
+  // Listeners de precio preview en modal nueva reserva (una sola vez)
+  ['nr-entrada', 'nr-salida', 'nr-personas'].forEach(id => {
+    document.getElementById(id).addEventListener('change', actualizarPreviewPrecio);
   });
 
   token = sessionStorage.getItem('adminToken');

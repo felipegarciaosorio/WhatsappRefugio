@@ -114,7 +114,9 @@ button { cursor: pointer; font-family: inherit; }
 .dia--pasado    { background: var(--gris-claro); color: #bbb; cursor: default; }
 .dia--disponible { background: var(--verde-claro); color: #2e7d32; }
 .dia--disponible:hover { background: var(--verde); color: #fff; }
-.dia--reservada  { background: var(--rojo-claro);  color: var(--rojo); cursor: not-allowed; }
+.dia--reservada  { background: var(--rojo-claro);  color: var(--rojo); cursor: pointer; }
+.dia--prereserva { background: #e3f2fd; color: #1565c0; cursor: pointer; border: 1.5px dashed #1565c0; }
+.dia--conflicto  { background: #fce4ec; color: #c62828; cursor: pointer; border: 2px solid #c62828; font-weight: 700; }
 .dia--bloqueado  { background: var(--amarillo-claro); color: #e65100; cursor: not-allowed; }
 .dia--mantenimiento { background: var(--gris-claro); color: var(--gris); cursor: not-allowed; }
 .dia--seleccionado-inicio { background: var(--azul)!important; color: #fff!important; font-weight: 700; }
@@ -165,6 +167,8 @@ button { cursor: pointer; font-family: inherit; }
 }
 .leyenda-dot--disponible  { background: var(--verde-claro); border: 1.5px solid var(--verde); }
 .leyenda-dot--reservada   { background: var(--rojo-claro);  border: 1.5px solid var(--rojo); }
+.leyenda-dot--prereserva  { background: #e3f2fd; border: 1.5px dashed #1565c0; }
+.leyenda-dot--conflicto   { background: #fce4ec; border: 2px solid #c62828; }
 .leyenda-dot--bloqueado   { background: var(--amarillo-claro); border: 1.5px solid var(--amarillo); }
 .leyenda-dot--mantenimiento { background: var(--gris-claro); border: 1.5px solid var(--gris); }
 
@@ -256,6 +260,7 @@ button { cursor: pointer; font-family: inherit; }
   letter-spacing: .04em;
 }
 .badge--pendiente  { background: #fff3e0; color: #e65100; }
+.badge--prereserva { background: #e3f2fd; color: #1565c0; }
 .badge--confirmada { background: var(--verde-claro); color: #2e7d32; }
 .badge--cancelada  { background: var(--rojo-claro);  color: var(--rojo); }
 .badge--completada { background: var(--gris-claro);  color: var(--gris); }

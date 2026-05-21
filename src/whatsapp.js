@@ -2,6 +2,7 @@ const { Boom } = require('@hapi/boom');
 const pino = require('pino');
 const path = require('path');
 const qrcode = require('qrcode-terminal');
+const https = require('https');
 
 const AUTH_DIR = path.join(__dirname, '..', 'auth_info_baileys');
 let sock = null;
@@ -89,4 +90,115 @@ async function init(onMessage) {
   });
 }
 
-module.exports = { sendMessage, init };
+// ── Whapi.cloud ───────────────────────────────────────────────────────────────
+
+function whapiRequest(path, method, body) {
+  const token = process.env.WHAPI_TOKEN;
+  if (!token) return Promise.reject(new Error('WHAPI_TOKEN no configurado'));
+
+  const payload = body ? JSON.stringify(body) : null;
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      `https://gate.whapi.cloud${path}`,
+      {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => {
+          resolve({ status: res.statusCode, data });
+        });
+      }
+    );
+    req.setTimeout(15000, () => {
+      req.destroy();
+      reject(new Error('Whapi timeout (15s)'));
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function checkWhapiHealth() {
+  try {
+    const { status, data } = await whapiRequest('/health', 'GET');
+    if (status !== 200) {
+      return { ok: false, status, detail: data };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return { ok: true, detail: data };
+    }
+    const waId = parsed.user?.id;
+    const channelStatus = parsed.status?.text;
+    // code 4 = AUTH: sesión conectada (Whapi)
+    const connected = channelStatus === 'AUTH' || parsed.status?.code === 4;
+    return {
+      ok: connected,
+      waId,
+      channelStatus,
+      channelId: parsed.channel_id,
+      detail: data,
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+async function sendMessageWhapi(to, text) {
+  const token = process.env.WHAPI_TOKEN;
+  if (!token) {
+    console.log(`[WHAPI MOCK → ${to}]: ${text}`);
+    return;
+  }
+
+  const digits = to.replace(/\D/g, '');
+  const chatId = `${digits}@s.whatsapp.net`;
+
+  const { status, data } = await whapiRequest('/messages/text', 'POST', {
+    to: chatId,
+    body: text,
+    typing_time: 0,
+  });
+
+  if (status >= 200 && status < 300) {
+    return { ok: true };
+  }
+
+  const err = new Error(`Whapi error ${status}: ${data}`);
+  console.error(`❌ No se pudo enviar WA a ${digits}:`, err.message);
+  throw err;
+}
+
+async function checkWhapiWebhook() {
+  try {
+    const { status, data } = await whapiRequest('/settings', 'GET');
+    if (status !== 200) return { ok: false, mensaje: `settings HTTP ${status}` };
+    const settings = JSON.parse(data);
+    const url = settings.webhooks?.[0]?.url || '';
+    if (!url) {
+      return { ok: false, mensaje: 'no hay URL de webhook configurada' };
+    }
+    if (!url.replace(/\/$/, '').endsWith('/webhook')) {
+      return {
+        ok: false,
+        mensaje: `URL actual "${url}" debe terminar en /webhook`,
+        url,
+      };
+    }
+    return { ok: true, url };
+  } catch (err) {
+    return { ok: false, mensaje: err.message };
+  }
+}
+
+module.exports = { sendMessage, sendMessageWhapi, checkWhapiHealth, checkWhapiWebhook, init };

@@ -133,7 +133,9 @@ class Calendario {
     // Admin / readonly — muestra razón real
     const textos = {
       disponible: 'Disponible',
-      reservada: 'Reservado',
+      reservada: 'Reservado (confirmado)',
+      prereserva: 'Prereserva — esperando anticipo',
+      conflicto: '⚠️ Varias reservas el mismo día — revisar',
       bloqueado: 'Bloqueado — uso personal',
       mantenimiento: 'En mantenimiento',
     };
@@ -221,7 +223,9 @@ class Calendario {
     } else {
       el.innerHTML = `
         <div class="leyenda-item"><div class="leyenda-dot leyenda-dot--disponible"></div> Disponible</div>
-        <div class="leyenda-item"><div class="leyenda-dot leyenda-dot--reservada"></div> Reservado</div>
+        <div class="leyenda-item"><div class="leyenda-dot leyenda-dot--prereserva"></div> Prereserva (sin pago)</div>
+        <div class="leyenda-item"><div class="leyenda-dot leyenda-dot--reservada"></div> Confirmado</div>
+        <div class="leyenda-item"><div class="leyenda-dot leyenda-dot--conflicto"></div> Conflicto (2+ reservas)</div>
         <div class="leyenda-item"><div class="leyenda-dot leyenda-dot--bloqueado"></div> Bloqueado</div>
         <div class="leyenda-item"><div class="leyenda-dot leyenda-dot--mantenimiento"></div> Mantenimiento</div>
       `;
